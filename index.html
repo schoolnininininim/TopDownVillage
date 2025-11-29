@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="ko">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width,initial-scale=1" />
+	<title>2인용 러시안 룰렛 (시뮬레이터)</title>
+	<style>
+		:root{--bg:#0f1724;--card:#0b1220;--accent:#f97316;--muted:#94a3b8;--good:#06b6d4;--bad:#ef4444}
+		*{box-sizing:border-box;font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif}
+		html,body{height:100%;margin:0;background:linear-gradient(180deg,#071023 0%, #081226 60%);color:#e6eef8}
+		.wrap{max-width:960px;margin:32px auto;padding:24px;background:linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:12px;border:1px solid rgba(255,255,255,0.03)}
+		header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+		h1{font-size:20px;margin:0}
+		p.lead{margin:0;color:var(--muted);font-size:13px}
+		.board{display:grid;grid-template-columns:1fr 360px;gap:20px;align-items:start}
+		.panel{background:var(--card);padding:16px;border-radius:10px;border:1px solid rgba(255,255,255,0.02)}
+		.controls{display:flex;flex-direction:column;gap:10px}
+		.row{display:flex;gap:8px}
+		input[type=text]{flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
+		button{padding:10px 12px;border-radius:8px;border:0;background:var(--accent);color:#081226;font-weight:600;cursor:pointer}
+		button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);color:var(--muted)}
+		.status{padding:12px;border-radius:8px;background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(0,0,0,0.14));font-size:14px}
+		.players{display:flex;gap:8px;align-items:center}
+		.player{flex:1;padding:10px;border-radius:8px;background:rgba(255,255,255,0.02);text-align:center}
+		.player.active{box-shadow:0 0 0 3px rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.12)}
+		.player .name{font-weight:700}
+		.cylinder-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:16px}
+		.cylinder{width:260px;height:260px;border-radius:50%;position:relative;background:radial-gradient(circle at 35% 30%, rgba(255,255,255,0.02), rgba(0,0,0,0.3));display:flex;align-items:center;justify-content:center}
+		.chamber{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.03);display:flex;align-items:center;justify-content:center;color:var(--muted);position:absolute;transition:transform 400ms, background-color 220ms, box-shadow 220ms}
+		.chamber.used{background:rgba(255,255,255,0.01);opacity:0.45}
+		.chamber.bullet{background:var(--bad);color:white}
+		.marker{position:absolute;top:-18px;left:50%;transform:translateX(-50%);width:18px;height:18px;border-radius:4px;background:var(--accent);box-shadow:0 4px 18px rgba(249,115,22,0.12)}
+		.log{max-height:180px;overflow:auto;padding:8px;background:rgba(0,0,0,0.18);border-radius:8px;font-size:13px}
+		.muted{color:var(--muted);font-size:13px}
+		.big{font-size:18px;font-weight:700}
+		.boom{color:var(--bad);font-weight:900;letter-spacing:1px}
+		footer{margin-top:14px;color:var(--muted);font-size:13px}
+		/* 모바일 최적화 */
+		@media(max-width:880px){
+			.board{grid-template-columns:1fr;}
+			.cylinder{width:220px;height:220px}
+			.chamber{width:38px;height:38px}
+		}
+
+		@media(max-width:520px){
+			.wrap{margin:12px;padding:14px}
+			header{flex-direction:column;align-items:flex-start;gap:8px}
+			.board{grid-template-columns:1fr;gap:12px}
+			.players{flex-direction:column}
+			.player{width:100%}
+			.controls .row{flex-direction:column}
+			input[type=text]{width:100%;padding:12px}
+			button{padding:12px;border-radius:10px;min-height:44px}
+			.status{font-size:14px}
+			.cylinder{width:200px;height:200px}
+			.log{max-height:140px}
+		}
+
+		/* 더 작은 모바일 (터치 대상 확보) */
+		@media(max-width:380px){
+			.cylinder{width:170px;height:170px}
+			.chamber{width:34px;height:34px}
+			h1{font-size:18px}
+		}
+	</style>
+</head>
+<body>
+	<div class="wrap">
+		<header>
+			<div>
+				<h1>2인용 러시안 룰렛 — 시뮬레이터</h1>
+				<p class="lead">안전한 시뮬레이션: 실제 행위를 모사하지 않으며, 교육/오락 목적의 가상 게임입니다.</p>
+			</div>
+			<div class="muted">실탄: 1 / 챔버: 6</div>
+		</header>
+
+		<div class="board">
+			<div class="panel">
+				<div class="players" id="players">
+					<div class="player" id="player0"><div class="name">플레이어 1</div><div class="muted" id="p0stat">생존</div></div>
+					<div class="player" id="player1"><div class="name">플레이어 2</div><div class="muted" id="p1stat">생존</div></div>
+				</div>
+
+				<div style="height:12px"></div>
+
+				<div class="controls">
+					<div class="row">
+						<input type="text" id="name0" placeholder="플레이어 1 이름" value="플레이어 1">
+						<input type="text" id="name1" placeholder="플레이어 2 이름" value="플레이어 2">
+					</div>
+					<div class="row">
+						<button id="applyNames">이름 적용</button>
+						<button id="newGame" class="ghost">새 게임</button>
+					</div>
+					<div class="row">
+						<button id="spin">실린더 돌리기 (Spin)</button>
+						<button id="pull" class="ghost" disabled>방아쇠 당기기 (Pull)</button>
+					</div>
+					<label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted)"><input type="checkbox" id="autoSpin"> 자동 스핀(턴마다)</label>
+					<div class="status" id="status">게임을 시작하려면 <strong>실린더 돌리기</strong>를 누르세요.</div>
+				</div>
+
+				<div style="height:12px"></div>
+
+				<div class="muted">로그</div>
+				<div class="log" id="log"></div>
+			</div>
+
+			<div class="panel cylinder-wrap">
+				<div class="cylinder" id="cylinder">
+					<div class="marker" title="현재 챔버 위치"></div>
+				</div>
+				<div style="width:100%">
+					<div class="row" style="justify-content:space-between;align-items:center">
+						<div class="muted">턴: <span id="turnText">플레이어 1</span></div>
+						<div class="big">상태: <span id="stateText">준비</span></div>
+					</div>
+					<div style="height:8px"></div>
+					<div class="muted">주의: 이 시뮬레이션은 실제 폭력/위험한 행동을 조장하지 않습니다.</div>
+				</div>
+			</div>
+		</div>
+
+		<footer>
+			- 시뮬레이션 전용 · 안전을 위해 실제 행위와 절대 연결하지 마세요.
+		</footer>
+	</div>
+
+	<script>
+		// 기본 설정
+		const CHAMBERS = 6
+		let bulletIndex = null
+		let currentPos = 0
+		let spun = false
+		let currentPlayer = 0
+		let players = [{name:'플레이어 1',alive:true},{name:'플레이어 2',alive:true}]
+		const cylinderEl = document.getElementById('cylinder')
+		const logEl = document.getElementById('log')
+		const statusEl = document.getElementById('status')
+		const turnText = document.getElementById('turnText')
+		const stateText = document.getElementById('stateText')
+		const pullBtn = document.getElementById('pull')
+		const spinBtn = document.getElementById('spin')
+		const newGameBtn = document.getElementById('newGame')
+		const applyNamesBtn = document.getElementById('applyNames')
+		const name0 = document.getElementById('name0')
+		const name1 = document.getElementById('name1')
+		const autoSpin = document.getElementById('autoSpin')
+
+		// 챔버 요소 생성
+		const chambers = []
+		for(let i=0;i<CHAMBERS;i++){
+			const el = document.createElement('div')
+			el.className='chamber'
+			el.dataset.index = i
+			el.textContent = ''
+			// 배치: 위치는 layoutChambers()에서 계산
+			cylinderEl.appendChild(el)
+			chambers.push(el)
+		}
+
+		// 챔버 위치를 실린더 크기에 맞춰 계산해 배치
+		function layoutChambers(){
+			const rect = cylinderEl.getBoundingClientRect()
+			const cx = rect.width/2
+			const cy = rect.height/2
+			// 챔버 요소 크기(첫 요소 기준)
+			const chSize = (chambers[0] && chambers[0].offsetWidth) ? chambers[0].offsetWidth : 44
+			// 반지름: 실린더 내부 공간에서 챔버가 들어갈 위치
+			const r = Math.max( (Math.min(rect.width, rect.height)/2) - chSize - 8, 20 )
+			for(let i=0;i<chambers.length;i++){
+				const angle = (i / CHAMBERS) * Math.PI * 2
+				const left = cx + Math.cos(angle)*r - (chSize/2)
+				const top = cy + Math.sin(angle)*r - (chSize/2)
+				chambers[i].style.left = left + 'px'
+				chambers[i].style.top = top + 'px'
+			}
+		}
+
+		// 초기 레이아웃 및 윈도우 리사이즈 대응
+		setTimeout(layoutChambers, 50)
+		window.addEventListener('resize', ()=>{
+			// 간단한 디바운스
+			if(window._layoutTimer) clearTimeout(window._layoutTimer)
+			window._layoutTimer = setTimeout(()=>{layoutChambers()}, 120)
+		})
+
+		function log(s){
+			const li = document.createElement('div')
+			li.textContent = s
+			logEl.prepend(li)
+		}
+
+		function updateUI(){
+			document.getElementById('player0').classList.toggle('active', currentPlayer===0)
+			document.getElementById('player1').classList.toggle('active', currentPlayer===1)
+			document.getElementById('p0stat').textContent = players[0].alive ? '생존' : '사망'
+			document.getElementById('p1stat').textContent = players[1].alive ? '생존' : '사망'
+			turnText.textContent = players[currentPlayer].name
+			stateText.textContent = spun ? '장전 완료' : '준비'
+		}
+
+		function rnd(n){return Math.floor(Math.random()*n)}
+
+		function spinCylinder(){
+			bulletIndex = rnd(CHAMBERS)
+			currentPos = rnd(CHAMBERS)
+			spun = true
+			pullBtn.disabled = false
+			statusEl.innerHTML = '<strong>실린더를 돌렸습니다.</strong> 방아쇠를 당기세요.'
+			log(players[currentPlayer].name + '님이 실린더를 돌렸습니다.')
+			// 숨김 상태로 초기화
+			chambers.forEach(c=>{c.classList.remove('used','bullet')})
+			// 위치 재계산 (화면 회전/크기 변경 대비)
+			layoutChambers()
+			updateUI()
+		}
+
+		function revealBulletAt(idx){
+			chambers[idx].classList.add('bullet')
+		}
+
+		function markUsed(idx){
+			chambers[idx].classList.add('used')
+		}
+
+		function pullTrigger(){
+			if(!spun){
+				statusEl.textContent = '먼저 실린더를 돌려주세요.'
+				return
+			}
+			statusEl.textContent = players[currentPlayer].name + '님이 방아쇠를 당겼습니다.'
+			// 간단한 애니메이션: 포지션 강조
+			const active = chambers[currentPos]
+			active.style.transform = 'scale(1.12)'
+			setTimeout(()=>active.style.transform='scale(1)',300)
+
+			if(currentPos === bulletIndex){
+				// 사망
+				revealBulletAt(currentPos)
+				players[currentPlayer].alive = false
+				spun = false
+				pullBtn.disabled = true
+				statusEl.innerHTML = '<span class="boom">BOOM!</span> '+ players[currentPlayer].name + '님이 패배했습니다.'
+				log(players[currentPlayer].name + '님이 사망했습니다. 게임 종료.')
+				updateUI()
+				return
+			}
+			// 클릭(빈방)
+			markUsed(currentPos)
+			log(players[currentPlayer].name + '님: 클릭 (안전)')
+			// 다음 챔버로 이동
+			currentPos = (currentPos + 1) % CHAMBERS
+			// 다음 플레이어
+			currentPlayer = (currentPlayer + 1) % 2
+			updateUI()
+			// 자동 스핀 옵션
+			if(autoSpin.checked){
+				setTimeout(()=>{spinCylinder();},500)
+			}
+		}
+
+		spinBtn.addEventListener('click', ()=>{
+			spinCylinder()
+		})
+
+		pullBtn.addEventListener('click', ()=>{
+			pullTrigger()
+		})
+
+		newGameBtn.addEventListener('click', ()=>{
+			// 초기화
+			players = [{name: name0.value||'플레이어 1',alive:true},{name: name1.value||'플레이어 2',alive:true}]
+			bulletIndex = null
+			currentPos = 0
+			spun = false
+			currentPlayer = 0
+			chambers.forEach(c=>{c.classList.remove('used','bullet')})
+			pullBtn.disabled = true
+			statusEl.textContent = '새 게임이 준비되었습니다. 실린더를 돌리세요.'
+			log('새 게임을 시작했습니다.')
+			updateUI()
+		})
+
+		applyNamesBtn.addEventListener('click', ()=>{
+			players[0].name = name0.value || '플레이어 1'
+			players[1].name = name1.value || '플레이어 2'
+			updateUI()
+			log('이름이 업데이트되었습니다.')
+		})
+
+		// 초기 UI세팅
+		updateUI()
+		log('게임이 로드되었습니다. 실린더 돌리기로 시작하세요.')
+
+		// 키보드 단축: S = Spin, P = Pull, N = New
+		window.addEventListener('keydown', (e)=>{
+			if(e.key === 's' || e.key === 'S') spinBtn.click()
+			if(e.key === 'p' || e.key === 'P') pullBtn.click()
+			if(e.key === 'n' || e.key === 'N') newGameBtn.click()
+		})
+	</script>
+</body>
+</html>
