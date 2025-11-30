@@ -1,328 +1,213 @@
 <!doctype html>
 <html lang="ko">
 <head>
-	<meta charset="utf-8" />
-	<meta name="viewport" content="width=device-width,initial-scale=1" />
-	<title>Mind Roulette</title>
-	<style>
-		/* Reset + base */
-		html,body{height:100%;margin:0;background:#0b0b0d;color:#eee;font-family: 'Press Start 2P', monospace;-webkit-tap-highlight-color:transparent}
-		/* Pixel art look */
-		:root{--accent:#ff5c5c;--muted:#8b8b9a}
-		.game-wrap{display:flex;flex-direction:column;align-items:center;justify-content:space-between;height:100vh;padding:12px;box-sizing:border-box}
-		.stage{position:relative;width:100%;max-width:480px;flex:1;display:flex;align-items:center;justify-content:center}
-		canvas{image-rendering:pixelated;border-radius:6px;box-shadow:0 8px 30px rgba(0,0,0,0.8)}
-		.hud{width:100%;max-width:480px;display:flex;justify-content:space-between;align-items:center;margin-top:10px}
-		.panel{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);font-size:11px}
-		.center-controls{display:flex;flex-direction:column;align-items:center;gap:8px;width:100%}
-		.buttons{display:flex;gap:10px;width:100%}
-		button.action{flex:1;padding:14px;border-radius:10px;border:0;background:linear-gradient(180deg,#222,#111);color:#fff;font-weight:700;font-size:13px;box-shadow:inset 0 -3px 0 rgba(0,0,0,0.6);touch-action:manipulation}
-		button.action:active{transform:translateY(2px)}
-		.small{font-size:12px;color:var(--muted)}
-		.title{font-size:14px;font-weight:800;color:var(--accent);letter-spacing:1px}
-		.overlay{position:absolute;left:0;right:0;top:0;bottom:0;pointer-events:none;display:flex;align-items:center;justify-content:center}
-		.message{background:rgba(0,0,0,0.6);padding:12px 16px;border-radius:10px;border:1px solid rgba(255,255,255,0.03);font-size:13px}
-		/* mobile safe sizes */
-		@media (max-width:420px){button.action{padding:16px;font-size:14px}}
-	</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>Mind Roulette Duo</title>
+  <style>
+    :root{--bg:#f6fbff;--panel:#ffffff;--accent:#ffd166;--muted:#6f7880}
+    html,body{height:100%;margin:0;background:var(--bg);font-family:system-ui,monospace}
+    .game-wrap{display:flex;flex-direction:column;height:100%;padding:8px;box-sizing:border-box;gap:8px}
+    .player-area{display:flex;align-items:center;justify-content:space-between;padding:8px;background:rgba(255,255,255,0.9);border-radius:10px}
+    .player-box{display:flex;flex-direction:column;align-items:center;width:48%}
+    .meta{font-size:13px;color:var(--muted);display:flex;gap:8px;align-items:center}
+    .indicator{background:rgba(0,0,0,0.04);padding:6px 8px;border-radius:8px}
+    .controls{display:flex;gap:8px;margin-top:8px;width:100%}
+    button.big{flex:1;padding:12px;border-radius:12px;border:0;background:linear-gradient(180deg,#ffd166,#ffc24d);font-weight:800;color:#222;font-size:16px;touch-action:manipulation}
+    button.big[disabled]{opacity:0.45}
+    .center-canvas{display:flex;align-items:center;justify-content:center}
+    canvas{image-rendering:pixelated;background:linear-gradient(180deg,#e9f7ff,#ffffff);border-radius:10px}
+    .round-info{display:flex;gap:10px;align-items:center;font-weight:700;color:#333}
+    .active{outline:3px solid rgba(255,209,102,0.25);box-shadow:0 6px 0 rgba(0,0,0,0.06)}
+    @media(max-width:420px){button.big{padding:14px;font-size:18px}}
+  </style>
 </head>
 <body>
-	<div class="game-wrap">
-		<div class="hud" style="width:100%;max-width:480px">
-			<div class="panel">
-				<div class="title">Mind Roulette</div>
-				<div class="small">턴: <span id="turnCount">0</span>/10</div>
-			</div>
-			<div class="panel" id="statusPanel">
-				<div id="turnText">초기화 중...</div>
-				<div class="small">라운드 제한: 10턴 · 총알은 숨김</div>
-			</div>
-			<div class="panel">
-				<div class="small">내 페널티: <span id="playerScore">0</span></div>
-				<div class="small">상대 페널티: <span id="aiScore">0</span></div>
-			</div>
-		</div>
+  <div class="game-wrap">
+    <!-- Top player (Player 1) -->
+    <div class="player-area" id="player1Area">
+      <div class="player-box" style="align-items:flex-end">
+        <div style="width:64px;height:64px"></div>
+        <div class="meta"><strong>Player 1</strong><div class="indicator">Penalty: <span id="p1Score">0</span></div></div>
+      </div>
+      <div style="width:48%;display:flex;flex-direction:column;align-items:flex-start">
+        <div class="round-info">Round <span id="roundNum">1</span> / 10 · Bullets left: <span id="bulletsLeft">-</span></div>
+        <div class="controls">
+          <button id="p1Self" class="big">Self-shot</button>
+          <button id="p1Opp" class="big">Opponent-shot</button>
+        </div>
+      </div>
+    </div>
 
-		<div class="stage">
-			<canvas id="gameCanvas" width="480" height="640"></canvas>
-			<div class="overlay"><div class="message" id="centerMsg">로딩...</div></div>
-		</div>
+    <!-- Center canvas -->
+    <div class="center-canvas">
+      <canvas id="gameCanvas" width="320" height="220"></canvas>
+    </div>
 
-		<div class="center-controls">
-			<div style="max-width:480px;width:100%;display:flex;justify-content:space-between;gap:8px;">
-				<div class="panel small" id="bulletsPanel">남은 챔버: <span id="chambersLeft">10</span></div>
-				<div class="panel small">숨긴 총알수: <span id="hiddenBullets">?</span></div>
-			</div>
-			<div style="max-width:480px;width:100%;display:flex;gap:10px;">
-				<button class="action" id="selfBtn">자기에게 쏘기 (Self-shot)</button>
-				<button class="action" id="oppBtn">상대에게 쏘기 (Opponent-shot)</button>
-			</div>
-			<div style="max-width:480px;width:100%;display:flex;justify-content:center;margin-top:6px;gap:8px;">
-				<button class="action" id="restartBtn" style="flex:0 0 auto;padding:10px 12px;background:#222;color:#fff">라운드 재시작</button>
-				<button class="action" id="revealBtn" style="flex:0 0 auto;padding:10px 12px;background:#141414;color:#fff">디버그: 총알 공개</button>
-			</div>
-		</div>
-	</div>
+    <!-- Bottom player (Player 2) -->
+    <div class="player-area" id="player2Area">
+      <div style="width:48%;display:flex;flex-direction:column;align-items:flex-end">
+        <div class="controls">
+          <button id="p2Self" class="big">Self-shot</button>
+          <button id="p2Opp" class="big">Opponent-shot</button>
+        </div>
+      </div>
+      <div class="player-box" style="align-items:flex-start">
+        <div style="width:64px;height:64px"></div>
+        <div class="meta"><strong>Player 2</strong><div class="indicator">Penalty: <span id="p2Score">0</span></div></div>
+      </div>
+    </div>
+  </div>
 
-	<script>
-		// Mind Roulette - single-file implementation
-		const canvas = document.getElementById('gameCanvas');
-		const ctx = canvas.getContext('2d');
-		const w = canvas.width, h = canvas.height;
-		const turnText = document.getElementById('turnText');
-		const centerMsg = document.getElementById('centerMsg');
-		const turnCountEl = document.getElementById('turnCount');
-		const playerScoreEl = document.getElementById('playerScore');
-		const aiScoreEl = document.getElementById('aiScore');
-		const chambersLeftEl = document.getElementById('chambersLeft');
-		const hiddenBulletsEl = document.getElementById('hiddenBullets');
-		const selfBtn = document.getElementById('selfBtn');
-		const oppBtn = document.getElementById('oppBtn');
-		const restartBtn = document.getElementById('restartBtn');
-		const revealBtn = document.getElementById('revealBtn');
+  <script>
+    // Mind Roulette Duo - Two players on one mobile device
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
 
-		// Game state
-		let round = 1;
-		let turnCount = 0; // up to 10
-		let chamberIndex = 0; // 0..9
-		let chambers = []; // array of booleans length 10 (true=bullet)
-		let bulletsLeft = 0;
-		let playerPenalty = 0;
-		let aiPenalty = 0;
-		let myTurn = true; // player starts
-		let gameOver = false;
+    // UI elements
+    const p1Self = document.getElementById('p1Self');
+    const p1Opp = document.getElementById('p1Opp');
+    const p2Self = document.getElementById('p2Self');
+    const p2Opp = document.getElementById('p2Opp');
+    const p1ScoreEl = document.getElementById('p1Score');
+    const p2ScoreEl = document.getElementById('p2Score');
+    const bulletsLeftEl = document.getElementById('bulletsLeft');
+    const roundNumEl = document.getElementById('roundNum');
+    const p1Area = document.getElementById('player1Area');
+    const p2Area = document.getElementById('player2Area');
 
-		// Sound via WebAudio
-		const AudioCtx = window.AudioContext || window.webkitAudioContext;
-		const audioCtx = new AudioCtx();
-		function gunSound(){
-			const o = audioCtx.createOscillator();
-			const g = audioCtx.createGain();
-			o.type = 'sawtooth';
-			o.frequency.setValueAtTime(120, audioCtx.currentTime);
-			g.gain.setValueAtTime(0, audioCtx.currentTime);
-			g.gain.linearRampToValueAtTime(0.18, audioCtx.currentTime + 0.01);
-			g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.4);
-			o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime + 0.45);
-		}
-		function tickSound(){
-			const o = audioCtx.createOscillator(); const g = audioCtx.createGain(); o.type='square'; o.frequency.value=400; g.gain.value=0.04; o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+0.06);
-		}
+    // Game state
+    let round = 1;
+    const TOTAL_ROUNDS = 10;
+    let chambers = new Array(10).fill(0); // 10 chambers
+    let currentIndex = 0; // next chamber index
+    let bulletsRemaining = 0; // number of real bullets placed
+    let p1Penalty = 0; let p2Penalty = 0;
+    let currentPlayer = Math.random() < 0.5 ? 1 : 2; // who starts
+    let animating = false;
 
-		// Pixel-art character sprites (8x8) simple arrays
-		const spriteScale = 10; // scale up for pixel look
-		const charSize = 8; // 8x8
-		const playerSprite = [
-			'  XX  XX',
-			'  XXXX  ',
-			' XXXXX ',
-			'  XXXX  ',
-			'  X  X  ',
-			'  X  X  ',
-			'  X  X  ',
-			' X    X '
-		];
-		const aiSprite = [
-			' XX  XX ',
-			' XXXX  ',
-			' XXXXX ',
-			' XXXX  ',
-			' X  X  ',
-			' X  X  ',
-			' X  X  ',
-			'X    X '
-		];
+    function startRound(){
+      // Randomly load 1..3 bullets into 10 chambers
+      chambers = new Array(10).fill(0);
+      const load = Math.floor(Math.random()*3)+1;
+      bulletsRemaining = load;
+      let placed = 0;
+      while(placed < load){
+        const i = Math.floor(Math.random()*10);
+        if(chambers[i] === 0){ chambers[i] = 1; placed++; }
+      }
+      currentIndex = 0;
+      bulletsLeftEl.textContent = bulletsRemaining;
+      roundNumEl.textContent = round;
+      highlightActive();
+      drawScene();
+    }
 
-		function drawSprite(sprite,x,y,scale,fill){
-			for(let ry=0;ry<sprite.length;ry++){
-				for(let rx=0;rx<sprite[ry].length;rx++){
-					const ch = sprite[ry][rx];
-					if(ch!==' '){
-						ctx.fillStyle = fill;
-						ctx.fillRect(x+rx*scale,y+ry*scale,scale,scale);
-					}
-				}
-			}
-		}
+    function nextRound(){
+      round++;
+      if(round > TOTAL_ROUNDS){ finishGame(); return; }
+      startRound();
+    }
 
-		function drawScene(){
-			// dark gradient with subtle vignette
-			const g = ctx.createLinearGradient(0,0,0,h);
-			g.addColorStop(0,'#060608'); g.addColorStop(1,'#0c0c0e');
-			ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
+    function finishGame(){
+      let result = '무승부';
+      if(p1Penalty < p2Penalty) result = 'Player 1 승리';
+      else if(p2Penalty < p1Penalty) result = 'Player 2 승리';
+      setTimeout(()=>{
+        if(confirm(`게임 종료\nPlayer1 penalty: ${p1Penalty}\nPlayer2 penalty: ${p2Penalty}\n${result}\n\n다시 플레이?`)){
+          // reset
+          p1Penalty = 0; p2Penalty = 0; round = 1; p1ScoreEl.textContent = p1Penalty; p2ScoreEl.textContent = p2Penalty;
+          startRound();
+        }
+      },200);
+    }
 
-			// spotlight center
-			ctx.globalCompositeOperation = 'lighter';
-			const lg = ctx.createRadialGradient(w/2,h/2,30,w/2,h/2,420);
-			lg.addColorStop(0,'rgba(255,255,255,0.02)'); lg.addColorStop(1,'rgba(0,0,0,0)');
-			ctx.fillStyle = lg; ctx.fillRect(0,0,w,h);
-			ctx.globalCompositeOperation = 'source-over';
+    function highlightActive(){
+      if(currentPlayer===1){ p1Area.classList.add('active'); p2Area.classList.remove('active'); }
+      else { p2Area.classList.add('active'); p1Area.classList.remove('active'); }
+      // enable only active player's buttons
+      p1Self.disabled = p1Opp.disabled = p2Self.disabled = p2Opp.disabled = true;
+      if(currentPlayer === 1){ p1Self.disabled = false; p1Opp.disabled = false; }
+      else { p2Self.disabled = false; p2Opp.disabled = false; }
+    }
 
-			// draw top (AI) and bottom (player) areas
-			// AI character
-			const pad = 40;
-			const charW = charSize*spriteScale, charH = charSize*spriteScale;
-			drawSprite(aiSprite, w/2 - charW/2, pad, spriteScale, '#b8c2ff');
-			// Player
-			drawSprite(playerSprite, w/2 - charW/2, h - pad - charH, spriteScale, '#ffd1c1');
+    function handleAction(player, choice){
+      if(animating) return; if(player !== currentPlayer) return;
+      animating = true;
+      const hasBullet = !!chambers[currentIndex];
+      const target = (choice==='self') ? player : (player===1?2:1);
 
-			// Gun in center (simple pixel gun)
-			const gx = w/2 - 40, gy = h/2 - 16;
-			ctx.fillStyle = '#9aa0ad'; ctx.fillRect(gx,gy,80,32);
-			ctx.fillStyle = '#111'; ctx.fillRect(gx+6,gy+8,20,16);
-			// muzzle
-			ctx.fillStyle = '#ffcc88'; ctx.fillRect(gx+74,gy+12,10,8);
+      animateShot(player, target, hasBullet).then(()=>{
+        if(hasBullet){
+          chambers[currentIndex] = 0; bulletsRemaining--; bulletsLeftEl.textContent = bulletsRemaining;
+          // apply penalty to the entity that got hit
+          if(target===1){ p1Penalty++; p1ScoreEl.textContent = p1Penalty; }
+          else { p2Penalty++; p2ScoreEl.textContent = p2Penalty; }
+          // turn passes to opponent
+          currentPlayer = (player===1?2:1);
+        } else {
+          if(choice==='self'){
+            // empty self-shot -> keep turn
+            currentPlayer = player;
+          } else {
+            // empty opponent-shot -> turn passes
+            currentPlayer = (player===1?2:1);
+          }
+        }
+        currentIndex = (currentIndex + 1) % 10;
+        if(bulletsRemaining <= 0){ animating = false; setTimeout(nextRound, 600); }
+        else { animating = false; highlightActive(); drawScene(); }
+      });
+    }
 
-			// UI subtle labels
-			ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fillRect(12,12,160,54);
-		}
+    // Attach handlers
+    p1Self.addEventListener('click', ()=>handleAction(1,'self'));
+    p1Opp.addEventListener('click', ()=>handleAction(1,'opp'));
+    p2Self.addEventListener('click', ()=>handleAction(2,'self'));
+    p2Opp.addEventListener('click', ()=>handleAction(2,'opp'));
 
-		function updateHUD(){
-			turnCountEl.textContent = turnCount;
-			playerScoreEl.textContent = playerPenalty;
-			aiScoreEl.textContent = aiPenalty;
-			chambersLeftEl.textContent = 10 - chamberIndex;
-			hiddenBulletsEl.textContent = '?';
-			turnText.textContent = myTurn ? '내 차례입니다 (아래)' : '상대 차례입니다 (위)';
-		}
+    // Simple pixel art drawing & animation
+    function drawScene(){
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      // bright, clean background
+      ctx.fillStyle = '#f0fbff'; ctx.fillRect(0,0,canvas.width,canvas.height);
+      // top player
+      drawPixelSprite(40,18,'#ffd1c1','#b24');
+      // bottom player
+      drawPixelSprite(40,130,'#bfe6ff','#146');
+      // gun in center
+      drawGun(120,70);
+    }
 
-		function placeChambers(){
-			chambers = new Array(10).fill(false);
-			const bulletCount = Math.floor(Math.random()*3)+1; // 1..3
-			bulletsLeft = bulletCount;
-			// randomly choose distinct indices
-			const idxs = [];
-			while(idxs.length<bulletCount){
-				const r = Math.floor(Math.random()*10);
-				if(!idxs.includes(r)) idxs.push(r);
-			}
-			for(const i of idxs) chambers[i] = true;
-			// randomize start position
-			chamberIndex = 0; // we'll use sequential access to simulate cylinder
-		}
+    function drawPixelSprite(x,y,color,accent){
+      const s = 4; const pixels = ['..xx..','.xxxx.','xxxxxx','.xx.xx','..xx..','.x..x.'];
+      for(let r=0;r<pixels.length;r++){
+        for(let c=0;c<pixels[r].length;c++){
+          if(pixels[r][c]==='x'){ ctx.fillStyle = color; ctx.fillRect(x+c*s,y+r*s,s,s); }
+        }
+      }
+    }
 
-		function resolveShot(targetIsOpponent){
-			if(gameOver) return;
-			if(chamberIndex >= 10){
-				endRound(); return;
-			}
-			// reveal chamber at chamberIndex
-			const hasBullet = chambers[chamberIndex];
-			chamberIndex++;
-			turnCount++;
-			// sounds & visuals
-			if(hasBullet) gunSound(); else tickSound();
+    function drawGun(x,y){ ctx.fillStyle='#333'; ctx.fillRect(x,y,80,14); ctx.fillStyle='#222'; ctx.fillRect(x+72,y+3,14,8); }
 
-			if(!targetIsOpponent){
-				// self-shot
-				if(hasBullet){
-					playerPenalty += 1; bulletsLeft = Math.max(0, bulletsLeft-1);
-					// on self-hit -> opponent's turn
-					myTurn = false;
-					centerMsg.textContent = '빗나리지 않았다! 자신에게 명중...';
-				} else {
-					// empty -> keep my turn
-					myTurn = true;
-					centerMsg.textContent = '헛발! 자신에게는 탄환이 없었다. 계속 유지.';
-				}
-			} else {
-				// opponent-shot
-				if(hasBullet){
-					aiPenalty += 1; bulletsLeft = Math.max(0, bulletsLeft-1);
-					// on opponent-hit -> my turn maintained
-					myTurn = true;
-					centerMsg.textContent = '명중! 상대가 감점당했다.';
-				} else {
-					// empty -> opponent's turn
-					myTurn = false;
-					centerMsg.textContent = '헛발! 상대에게는 탄환이 없었다. 상대 차례.';
-				}
-			}
+    function animateShot(shooter, target, isBullet){
+      return new Promise((resolve)=>{
+        const from = {x: 160, y: 82};
+        const to = (target===1)? {x:80,y:36} : {x:80,y:166};
+        const dur = isBullet? 380 : 200;
+        let start=null;
+        function frame(ts){ if(!start) start=ts; const t=Math.min(1,(ts-start)/dur); drawScene(); if(t<0.15){ ctx.fillStyle='rgba(255,220,150,'+(1-t*6)+')'; ctx.fillRect(from.x+28,from.y-6,12,20); }
+          const bx = from.x + (to.x-from.x)*t; const by = from.y + (to.y-from.y)*t;
+          if(isBullet){ ctx.fillStyle='#222'; ctx.beginPath(); ctx.arc(bx,by,4,0,Math.PI*2); ctx.fill(); }
+          if(t<1) requestAnimationFrame(frame); else requestAnimationFrame(()=>resolve()); }
+        requestAnimationFrame(frame);
+      });
+    }
 
-			// check end conditions
-			if(bulletsLeft <= 0 || turnCount >= 10 || chamberIndex >= 10){
-				setTimeout(()=> endRound(), 700);
-			}
-			updateHUD(); drawScene();
-		}
-
-		function endRound(){
-			gameOver = true;
-			let outcome = '';
-			if(playerPenalty < aiPenalty) outcome = '승리! 당신이 더 적게 감점되었습니다.';
-			else if(playerPenalty > aiPenalty) outcome = '패배... 상대가 더 적게 감점되었습니다.';
-			else outcome = '무승부입니다.';
-			centerMsg.textContent = `라운드 종료 — ${outcome}`;
-			turnText.textContent = '라운드 종료';
-		}
-
-		// AI logic
-		function aiTakeTurn(){
-			if(gameOver) return;
-			// slight delay to simulate thinking
-			setTimeout(()=>{
-				// Simple AI: if next chamber contains bullet -> shoot opponent (to inflict); else shoot self to keep turn
-				const nextHasBullet = chambers[chamberIndex] === true;
-				// add some randomness to bluff
-				const bluff = Math.random() < 0.15;
-				const chooseOpponent = nextHasBullet ? !bluff : Math.random() < 0.35;
-				// execute
-				resolveShot(chooseOpponent);
-				// if after shot myTurn == false then it's player's turn; else AI may continue
-				if(!myTurn && !gameOver){
-					// player's turn now
-				} else if(myTurn && !gameOver){
-					// AI keeps turn; schedule another AI action
-					setTimeout(aiTakeTurn, 600 + Math.random()*400);
-				}
-			}, 600 + Math.random()*600);
-		}
-
-		// button handlers
-		selfBtn.addEventListener('click', ()=>{
-			if(!myTurn || gameOver) return; resolveShot(false);
-			if(!gameOver && !myTurn) setTimeout(aiTakeTurn, 500);
-		});
-		oppBtn.addEventListener('click', ()=>{
-			if(!myTurn || gameOver) return; resolveShot(true);
-			if(!gameOver && !myTurn) setTimeout(aiTakeTurn, 500);
-		});
-		restartBtn.addEventListener('click', ()=>{
-			startRound();
-		});
-		revealBtn.addEventListener('click', ()=>{
-			// debug toggle: show actual bullets briefly
-			hiddenBulletsEl.textContent = bulletsLeft;
-			setTimeout(()=> hiddenBulletsEl.textContent = '?', 1200);
-		});
-
-		function startRound(){
-			round++;
-			turnCount = 0; chamberIndex = 0; playerPenalty = 0; aiPenalty = 0; gameOver = false; myTurn = true;
-			placeChambers();
-			turnText.textContent = '내 차례입니다 (아래)';
-			centerMsg.textContent = '새 라운드 시작 — 총알 수와 위치는 숨겨집니다.';
-			updateHUD(); drawScene();
-		}
-
-		// initialize
-		function init(){
-			drawScene();
-			placeChambers();
-			centerMsg.textContent = '시작하려면 선택하세요.';
-			turnText.textContent = '내 차례입니다 (아래)';
-			updateHUD();
-			// autoplay audio context warmup on first user interaction
-			function unlock(){
-				const s = audioCtx.createGain(); s.gain.value = 0; s.connect(audioCtx.destination);
-				const o = audioCtx.createOscillator(); o.connect(s); o.start(); o.stop(audioCtx.currentTime+0.01);
-				window.removeEventListener('touchstart', unlock); window.removeEventListener('click', unlock);
-			}
-			window.addEventListener('touchstart', unlock, {passive:true});
-			window.addEventListener('click', unlock, {passive:true});
-		}
-
-		init();
-	</script>
+    // start
+    p1ScoreEl.textContent = p1Penalty; p2ScoreEl.textContent = p2Penalty;
+    startRound(); highlightActive(); drawScene();
+  </script>
 </body>
 </html>
